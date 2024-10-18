@@ -1,0 +1,6 @@
+devel_space: /home/d5error/ws_rmrobot/devel
+install: false
+install_space: /home/d5error/ws_rmrobot/install
+profile: default
+source_space: /home/d5error/ws_rmrobot/src
+workspace: /home/d5error/ws_rmrobot

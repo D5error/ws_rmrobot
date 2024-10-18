@@ -1,0 +1,1 @@
+/home/d5error/ws_rmrobot/devel/.private/rm_control/share/rm_control/cmake/rm_controlConfig.cmake

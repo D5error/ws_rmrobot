@@ -1,0 +1,1 @@
+/home/d5error/ws_rmrobot/devel/.private/rm_65_moveit_config/lib/pkgconfig/rm_65_moveit_config.pc

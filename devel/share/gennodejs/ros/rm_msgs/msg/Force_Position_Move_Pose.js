@@ -1,0 +1,1 @@
+/home/d5error/ws_rmrobot/devel/.private/rm_msgs/share/gennodejs/ros/rm_msgs/msg/Force_Position_Move_Pose.js

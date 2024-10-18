@@ -1,0 +1,1 @@
+/home/d5error/ws_rmrobot/devel/.private/rm_gazebo/lib/pkgconfig/rm_gazebo.pc

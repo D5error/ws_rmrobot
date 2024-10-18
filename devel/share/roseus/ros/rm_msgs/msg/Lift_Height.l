@@ -1,0 +1,1 @@
+/home/d5error/ws_rmrobot/devel/.private/rm_msgs/share/roseus/ros/rm_msgs/msg/Lift_Height.l

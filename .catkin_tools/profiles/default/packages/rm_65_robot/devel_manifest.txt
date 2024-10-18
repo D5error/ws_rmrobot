@@ -1,0 +1,2 @@
+rm_robot/rm_65_robot
+/home/d5error/ws_rmrobot/devel/.private/rm_65_robot/cmake.lock /home/d5error/ws_rmrobot/devel/./cmake.lock

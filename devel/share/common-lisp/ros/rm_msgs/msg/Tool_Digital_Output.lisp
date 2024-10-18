@@ -1,0 +1,1 @@
+/home/d5error/ws_rmrobot/devel/.private/rm_msgs/share/common-lisp/ros/rm_msgs/msg/Tool_Digital_Output.lisp

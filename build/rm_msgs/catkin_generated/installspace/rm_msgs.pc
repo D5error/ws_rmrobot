@@ -1,0 +1,8 @@
+prefix=/home/d5error/ws_rmrobot/install
+
+Name: rm_msgs
+Description: Description of rm_msgs
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib 
+Requires: geometry_msgs rospy std_msgs roscpp
