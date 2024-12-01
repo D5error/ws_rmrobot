@@ -1,0 +1,12 @@
+build
+logs
+.catkin_tools
+.venv
+.vscode
+devel
+temp.wav
+temp.txt
+temp.jpg
+src/rm_robot/rm_65_demo/scripts/__pycache__
+src/aruco_ros
+src/realsense-ros
