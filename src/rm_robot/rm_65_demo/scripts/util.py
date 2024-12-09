@@ -12,8 +12,8 @@ import numpy as np
 import sounddevice as sd
 import pyrealsense2 as rs
 import scipy.io.wavfile as wav
-from rm_msgs.msg import MoveJ_P, Plan_State
-
+from std_msgs.msg import Bool
+from rm_msgs.msg import MoveJ_P, Plan_State, Hand_Angle, Hand_Speed
 
 # 服务器信息
 sftp_ip = '172.25.74.21'  # 替换为你的服务器IP地址
@@ -24,8 +24,49 @@ remote_dir = '/home/zhangjs/GLIP/input_try1' # 远程目录路径
 remote_txt_path = r'/home/zhangjs/GLIP/output_image/ii7_out_bbox.txt' # 服务器上的文件路径
 
 
+def hand_grip(hand_angle, hand_speed, ori_x, ori_y, ori_z, ori_w):
+    wait_for_ros_ok()
 
-def get_boundingbox():
+    hand_speed_pub = rospy.Publisher("/rm_driver/Hand_SpeedAngle", Hand_Speed, queue_size=10)
+    hand_angle_pub = rospy.Publisher("/rm_driver/Hand_SetAngle",Hand_Angle, queue_size=10)
+    time.sleep(2)
+    hand_speed_msg = Hand_Speed()
+    hand_angle_msg = Hand_Angle()
+    hand_speed_msg.hand_speed = hand_speed
+    hand_speed_pub.publish(hand_speed_msg)
+    time.sleep(1)
+
+    hand_angle_msg.hand_angle = hand_angle
+    hand_angle_pub.publish(hand_angle_msg)
+
+    time.sleep(2)
+    publish_to_ros(
+        -0.4,
+        0,
+        0.3,
+        ori_x,
+        ori_y,
+        ori_z,
+        ori_w,
+        speed=0.07,
+    )
+
+    time.sleep(10)
+
+
+    hand_angle_msg.hand_angle = [1000, 1000, 1000, 1000, 1000, 0]    
+    hand_angle_pub.publish(hand_angle_msg)
+
+
+
+    rospy.loginfo("finish hand grip")
+
+
+    
+    finish_ros_task()
+
+
+def get_boundingbox(duration):
     def get_color_depth_image():
         # 初始化Realsense管道
         pipeline = rs.pipeline()
@@ -59,7 +100,7 @@ def get_boundingbox():
             r"./temp.txt"
         ]
 
-        local_txt_path = "F:\\embodiedAI\\server_data\\ii7_out_bbox.txt"
+        local_txt_path = r"./ii7_out_bbox.txt"
 
 
         # 创建SSH客户端并连接到SFTP服务器
@@ -95,8 +136,8 @@ def get_boundingbox():
         client.close()
         print("文件上传成功")
 
-        print("等待 10 秒...")
-        time.sleep(10)
+        print(f"等待 {duration} 秒...")
+        time.sleep(duration)
 
 
 
@@ -146,14 +187,17 @@ def get_boundingbox():
     color_image, depth_image = get_color_depth_image()
 
     # 存储彩色图片
-    cv2.imwrite(r"./temp.jpg", color_image)
+    jpg_path = r"./temp.jpg"
+    if os.path.exists(jpg_path):
+        os.remove(jpg_path)
+    cv2.imwrite(jpg_path, color_image)
     print("等待图片储存")
-    time.sleep(5)
+    time.sleep(2)
 
     upload_img_to_server()
 
-
     file_path = r"./ii7_out_bbox.txt"  # 替换为你的文件路径
+
     target_label = 1  # 替换为你想要的Label
     top_left_boxes, bottom_right_boxes = extract_bounding_boxes(file_path, target_label)
 
@@ -215,6 +259,8 @@ def voice_translate(seconds, model="medium"):
     output_file = r"./temp.wav"
 
     # 录音并保存为 MP3
+    if os.path.exists(output_file):
+        os.remove(output_file)
     record_audio(seconds, output_file)
 
     # 执行 whisper 命令
@@ -227,18 +273,15 @@ def voice_translate(seconds, model="medium"):
         task="translate"
     )
 
-    print("等待注释文件存储")
-    time.sleep(5)
-
 
 def publish_to_ros(pos_x, pos_y, pos_z, ori_x, ori_y, ori_z, ori_w, speed):
     def plan_state_callback(msg):
         if msg.state:
             rospy.loginfo("*******Plan State OK")
+            finish_ros_task()
         else:
             rospy.loginfo("*******Plan State Fail")
         
-    rospy.init_node('d5_move_arm_pub', anonymous=True)
 
     # 发布
     pub = rospy.Publisher('/rm_driver/MoveJ_P_Cmd', MoveJ_P, queue_size=10)
@@ -246,7 +289,7 @@ def publish_to_ros(pos_x, pos_y, pos_z, ori_x, ori_y, ori_z, ori_w, speed):
     # 订阅
     rospy.Subscriber("/rm_driver/Plan_State", Plan_State, plan_state_callback)
 
-    rospy.sleep(2.0)
+    rospy.sleep(1.0)
 
     moveJ_P_TargetPose = MoveJ_P()
     moveJ_P_TargetPose.Pose.position.x = pos_x
@@ -261,8 +304,6 @@ def publish_to_ros(pos_x, pos_y, pos_z, ori_x, ori_y, ori_z, ori_w, speed):
     # 发送指令
     rospy.loginfo("Publishing d5_move_arm by python...")
     pub.publish(moveJ_P_TargetPose)
-
-    rospy.spin()
 
 
 def get_wxyz_from_rpy(roll, pitch, yaw):
@@ -377,8 +418,8 @@ def get_camera_extrinsic_matrix():
     DIST_COEFFS = np.array([[0, 0, 0, 0]])
 
     # 3D world coordinate system points
-    POINT_3D_LIST = np.float32([(-0.60, -0.30000, 0), (-0.60000, 0.30000, 0), 
-                                (-0.40000, 0.3, 0), (-0.40000, -0.3, 0)])
+    POINT_3D_LIST = np.float32([(-0.5, -0.15, 0), (-0.5, 0.15, 0), 
+                                (-0.3, 0.15, 0), (-0.3, -0.15, 0)])
 
     # Initialize RealSense pipeline
     pipeline = rs.pipeline()
@@ -440,3 +481,19 @@ def get_camera_extrinsic_matrix():
     print(f"外参矩阵:\n{extrinsic_matrix}")
 
     return CAMERA_MATRIX, extrinsic_matrix
+
+
+def wait_for_ros_ok():
+    global is_Plan_State_ok
+    while not is_Plan_State_ok:
+        time.sleep(0.5)
+    is_Plan_State_ok = False
+
+
+def finish_ros_task():
+    global is_Plan_State_ok
+    is_Plan_State_ok = True
+
+###########################################################
+# 全局变量
+is_Plan_State_ok = False # 每个ros函数是否实行完它的功能

@@ -49,19 +49,14 @@ int main(int argc, char** argv)
     // 定义一个MoveJ_P指令的目标位姿
     rm_msgs::MoveJ_P moveJ_P_TargetPose;
 
-    // 对应的世界坐标: [-0.43008003  0.01928499 -0.00814839]
-    // 四元数 [ 0.38729833 -0.77459667  0.2236068   0.4472136 ]
-        // 0.38729833 -0.77459667  0.2236068   0.4472136
-        // [ 0.34258549 -0.68517098  0.28746336  0.57492672]
 
-
-moveJ_P_TargetPose.Pose.position.x = -0.2196522667780058;
-moveJ_P_TargetPose.Pose.position.y = 0.32620302237067444;      
-moveJ_P_TargetPose.Pose.position.z = 0.1649902653561155;       
-moveJ_P_TargetPose.Pose.orientation.x = -0.6013079850947101;   
-moveJ_P_TargetPose.Pose.orientation.y = -0.6781021397286767;   
-moveJ_P_TargetPose.Pose.orientation.z = -0.08472666559776926;  
-moveJ_P_TargetPose.Pose.orientation.w = 0.4140381471475956; 
+    moveJ_P_TargetPose.Pose.position.x = -0.2196522667780058;
+    moveJ_P_TargetPose.Pose.position.y = 0.32620302237067444;      
+    moveJ_P_TargetPose.Pose.position.z = 0.1649902653561155;       
+    moveJ_P_TargetPose.Pose.orientation.x = -0.6013079850947101;   
+    moveJ_P_TargetPose.Pose.orientation.y = -0.6781021397286767;   
+    moveJ_P_TargetPose.Pose.orientation.z = -0.08472666559776926;  
+    moveJ_P_TargetPose.Pose.orientation.w = 0.4140381471475956; 
 
     moveJ_P_TargetPose.speed = 0.1;
 
@@ -72,5 +67,3 @@ moveJ_P_TargetPose.Pose.orientation.w = 0.4140381471475956;
 
     return 0;
 }
-
-
