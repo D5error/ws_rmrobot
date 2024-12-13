@@ -13,6 +13,7 @@ import sounddevice as sd
 import pyrealsense2 as rs
 import scipy.io.wavfile as wav
 from std_msgs.msg import Bool
+from scipy.spatial.transform import Rotation as R
 from rm_msgs.msg import MoveJ_P, Plan_State, Hand_Angle, Hand_Speed
 
 # 服务器信息
@@ -24,46 +25,36 @@ remote_dir = '/home/zhangjs/GLIP/input_try1' # 远程目录路径
 remote_txt_path = r'/home/zhangjs/GLIP/output_image/ii7_out_bbox.txt' # 服务器上的文件路径
 
 
-def hand_grip(hand_angle, hand_speed, ori_x, ori_y, ori_z, ori_w):
-    wait_for_ros_ok()
-
-    hand_speed_pub = rospy.Publisher("/rm_driver/Hand_SpeedAngle", Hand_Speed, queue_size=10)
-    hand_angle_pub = rospy.Publisher("/rm_driver/Hand_SetAngle",Hand_Angle, queue_size=10)
-    time.sleep(2)
+def grip_control(hand_angle, hand_speed):
     hand_speed_msg = Hand_Speed()
     hand_angle_msg = Hand_Angle()
     hand_speed_msg.hand_speed = hand_speed
+
+    # 发布速度
     hand_speed_pub.publish(hand_speed_msg)
     time.sleep(1)
 
+    # 发布角度
     hand_angle_msg.hand_angle = hand_angle
     hand_angle_pub.publish(hand_angle_msg)
 
-    time.sleep(2)
-    publish_to_ros(
-        -0.4,
-        0,
-        0.3,
-        ori_x,
-        ori_y,
-        ori_z,
-        ori_w,
-        speed=0.07,
-    )
-
-    time.sleep(10)
+    rospy.loginfo("grip control")
 
 
-    hand_angle_msg.hand_angle = [1000, 1000, 1000, 1000, 1000, 0]    
+def grip_open(hand_speed):
+    hand_speed_msg = Hand_Speed()
+    hand_angle_msg = Hand_Angle()
+    hand_speed_msg.hand_speed = hand_speed
+
+    # 发布速度
+    hand_speed_pub.publish(hand_speed_msg)
+    time.sleep(1)
+
+    # 发布角度
+    hand_angle_msg.hand_angle = [1000, 1000, 1000, 1000, 1000, 0]
     hand_angle_pub.publish(hand_angle_msg)
 
-
-
-    rospy.loginfo("finish hand grip")
-
-
-    
-    finish_ros_task()
+    rospy.loginfo("grip open")
 
 
 def get_boundingbox(duration):
@@ -197,6 +188,8 @@ def get_boundingbox(duration):
     upload_img_to_server()
 
     file_path = r"./ii7_out_bbox.txt"  # 替换为你的文件路径
+    if os.path.exists(file_path):
+        os.remove(file_path)
 
     target_label = 1  # 替换为你想要的Label
     top_left_boxes, bottom_right_boxes = extract_bounding_boxes(file_path, target_label)
@@ -274,39 +267,84 @@ def voice_translate(seconds, model="medium"):
     )
 
 
-def publish_to_ros(pos_x, pos_y, pos_z, ori_x, ori_y, ori_z, ori_w, speed):
-    def plan_state_callback(msg):
-        if msg.state:
-            rospy.loginfo("*******Plan State OK")
-            finish_ros_task()
-        else:
-            rospy.loginfo("*******Plan State Fail")
-        
+def move_hand_callback(msg):
+    if msg.state:
+        rospy.loginfo("*******Move Hand OK")
+    else:
+        rospy.loginfo("*******Move Hand Fail")
 
-    # 发布
-    pub = rospy.Publisher('/rm_driver/MoveJ_P_Cmd', MoveJ_P, queue_size=10)
 
-    # 订阅
-    rospy.Subscriber("/rm_driver/Plan_State", Plan_State, plan_state_callback)
-
-    rospy.sleep(1.0)
+def move_hand(hand_x, hand_y, hand_z, speed, hand_parameters):
+    hand_point=Point(x=hand_x, y=hand_y, z=hand_z)
+    end_point, end_roll, end_pitch, end_yaw = hand_point_to_end_point(hand_point, hand_parameters)
+    end_ori_w, end_ori_x, end_ori_y, end_ori_z = rpy_to_wxyz(end_roll, end_pitch, end_yaw)
 
     moveJ_P_TargetPose = MoveJ_P()
-    moveJ_P_TargetPose.Pose.position.x = pos_x
-    moveJ_P_TargetPose.Pose.position.y = pos_y
-    moveJ_P_TargetPose.Pose.position.z = pos_z
-    moveJ_P_TargetPose.Pose.orientation.x = ori_x
-    moveJ_P_TargetPose.Pose.orientation.y = ori_y
-    moveJ_P_TargetPose.Pose.orientation.z = ori_z
-    moveJ_P_TargetPose.Pose.orientation.w = ori_w
+    moveJ_P_TargetPose.Pose.position.x = end_point.x
+    moveJ_P_TargetPose.Pose.position.y = end_point.y
+    moveJ_P_TargetPose.Pose.position.z = end_point.z
+    moveJ_P_TargetPose.Pose.orientation.x = end_ori_x
+    moveJ_P_TargetPose.Pose.orientation.y = end_ori_y
+    moveJ_P_TargetPose.Pose.orientation.z = end_ori_z
+    moveJ_P_TargetPose.Pose.orientation.w = end_ori_w
     moveJ_P_TargetPose.speed = speed
 
     # 发送指令
-    rospy.loginfo("Publishing d5_move_arm by python...")
-    pub.publish(moveJ_P_TargetPose)
+    rospy.loginfo("try to move hand")
+    move_hand.publish(moveJ_P_TargetPose)
 
 
-def get_wxyz_from_rpy(roll, pitch, yaw):
+def hand_point_to_end_point(hand_point, hand_parameters):
+    '''
+    y_offset是hand坐标系相对end坐标系“正”y方向的偏移量
+    z_rotation是hand坐标系相对end坐标系逆时针转动的角度
+    '''
+    def sin(deg):
+        ret = math.sin(math.radians(deg))
+        return ret
+
+    def cos(deg):
+        ret = math.cos(math.radians(deg))
+        return ret
+
+    def arctan(x, y):
+        ret_deg = math.degrees(math.atan2(y, x))
+        return ret_deg
+
+
+    hand_length = hand_parameters.hand_length
+    downward_angle = hand_parameters.downward_angle
+    y_offset = hand_parameters.y_offset
+    z_rotation = hand_parameters.z_rotation
+
+    if downward_angle >= 90 or downward_angle < 0:
+        raise ValueError(f"向下角度{downward_angle}应该在0度到90度之间")
+
+    # 位置
+    hand_x, hand_y, hand_z = hand_point.get_xyz()
+    theta = arctan(hand_x, hand_y) # 物体与世界坐标系x轴正方向的夹角，[-180°, 180°]
+    end_pos_x = hand_x - hand_length * cos(downward_angle) * cos(theta) + y_offset * cos(theta - 90)
+    end_pos_y = hand_y - hand_length * cos(downward_angle) * sin(theta) + y_offset * sin(theta - 90)
+    end_pos_z = hand_z + hand_length * sin(downward_angle)
+    end_point = Point(end_pos_x, end_pos_y, end_pos_z)
+    
+    # 姿态，huangting
+    end_roll = 0
+    end_pitch = -90 - downward_angle
+    end_yaw = 180 + theta
+    rotation_matrix = R.from_euler('xyz', [end_roll, end_pitch, end_yaw], degrees=True).as_matrix()
+    rotate_z_matrix = np.array([
+        [cos(z_rotation), sin(z_rotation), 0],
+        [-sin(z_rotation),cos(z_rotation), 0],
+        [0, 0, 1]
+    ])
+    end_matrix = rotation_matrix @ rotate_z_matrix
+    end_roll, end_pitch, end_yaw = R.from_matrix(end_matrix).as_euler('xyz', degrees=True)
+
+    return end_point, end_roll, end_pitch, end_yaw
+
+
+def rpy_to_wxyz(roll, pitch, yaw):
     # 将角度转换为弧度
     roll = np.radians(roll)
     pitch = np.radians(pitch)
@@ -328,77 +366,7 @@ def get_wxyz_from_rpy(roll, pitch, yaw):
     return w, x, y, z
 
 
-def get_end_from_obj(obj_x, obj_y, obj_z, beta, hand_length, height, offset, hand_z_rotation):
-    def sin(deg):
-        ret_deg = math.sin(math.radians(deg))
-        return ret_deg
-
-    def cos(deg):
-        ret_deg = math.cos(math.radians(deg))
-        return ret_deg
-    
-    def rpy_after_z_rotation(r, p, y, a):
-        # 转换为弧度
-        r, p, y, a = np.radians([r, p, y, a])
-        
-        # 构造旋转矩阵
-        R_x = np.array([
-            [1, 0, 0],
-            [0, np.cos(r), -np.sin(r)],
-            [0, np.sin(r), np.cos(r)]
-        ])
-        R_y = np.array([
-            [np.cos(p), 0, np.sin(p)],
-            [0, 1, 0],
-            [-np.sin(p), 0, np.cos(p)]
-        ])
-        R_z = np.array([
-            [np.cos(y), -np.sin(y), 0],
-            [np.sin(y), np.cos(y), 0],
-            [0, 0, 1]
-        ])
-        R_add = np.array([
-            [np.cos(a), -np.sin(a), 0],
-            [np.sin(a), np.cos(a), 0],
-            [0, 0, 1]
-        ])
-        
-        # 计算新矩阵
-        R_initial = R_z @ R_y @ R_x
-        R_new = R_initial @ R_add
-        
-        # 提取新的RPY
-        new_pitch = -np.arcsin(R_new[2, 0])
-        new_roll = np.arctan2(R_new[2, 1], R_new[2, 2])
-        new_yaw = np.arctan2(R_new[1, 0], R_new[0, 0])
-        
-        return np.degrees(new_roll), np.degrees(new_pitch), np.degrees(new_yaw)
-
-    # 异常处理
-    if not(beta >= 0 and beta <= 90) or not(height > 0) or not (hand_length > 0):
-        return None
-
-
-    # 物体与世界坐标系x轴正方向的夹角，[-180°, 180°]
-    theta = math.degrees(math.atan2(obj_y, obj_x))
-
-    # 末端位置
-    end_world_x = (obj_x - hand_length * cos(beta) * cos(theta)) + offset * cos(theta - 90)
-    end_world_y = (obj_y - hand_length * cos(beta) * sin(theta)) + offset * sin(theta - 90)
-    end_world_z = obj_z + height + hand_length * sin(beta)
-
-    # 末端姿态（RPY角）
-    end_roll = 0
-    end_pitch = -(90 + beta)
-    end_yaw = 180 + theta
-
-    # 沿新z轴转hand_z_rotation
-    end_roll, end_pitch, end_yaw = rpy_after_z_rotation(end_roll, end_pitch, end_yaw, hand_z_rotation)
-
-    return end_world_x, end_world_y, end_world_z, end_roll, end_pitch, end_yaw
-
-
-def get_world_coords_from_boundingbox(u, v, depth, camera_matrix, extrinsic_matrix):
+def boundingbox_to_world_coordinate(u, v, depth, camera_matrix, extrinsic_matrix):
     # 像素坐标 -> 相机坐标
     pixel_coords = np.array([u, v, 1])
     cam_coords = depth * np.linalg.inv(camera_matrix) @ pixel_coords
@@ -483,17 +451,25 @@ def get_camera_extrinsic_matrix():
     return CAMERA_MATRIX, extrinsic_matrix
 
 
-def wait_for_ros_ok():
-    global is_Plan_State_ok
-    while not is_Plan_State_ok:
-        time.sleep(0.5)
-    is_Plan_State_ok = False
+class Hand_parameters:
+    def __init__(self, downward_angle, hand_length, z_rotation, y_offset):
+        self.downward_angle = downward_angle
+        self.hand_length = hand_length
+        self.z_rotation = z_rotation
+        self.y_offset = y_offset
+        
 
-
-def finish_ros_task():
-    global is_Plan_State_ok
-    is_Plan_State_ok = True
-
+class Point:
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+    
+    def get_xyz(self):
+        return self.x, self.y, self.z
 ###########################################################
 # 全局变量
-is_Plan_State_ok = False # 每个ros函数是否实行完它的功能
+hand_speed_pub = rospy.Publisher("/rm_driver/Hand_SpeedAngle", Hand_Speed, queue_size=10) # 灵巧手速度发布
+hand_angle_pub = rospy.Publisher("/rm_driver/Hand_SetAngle",Hand_Angle, queue_size=10) # 灵巧手角度发布
+move_hand_pub = rospy.Publisher('/rm_driver/MoveJ_P_Cmd', MoveJ_P, queue_size=10)
+rospy.Subscriber("/rm_driver/Plan_State", Plan_State, move_hand_callback)

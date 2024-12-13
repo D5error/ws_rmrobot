@@ -6,6 +6,7 @@ logs
 devel
 temp.wav
 temp.txt
+tmp.py
 temp.jpg
 src/rm_robot/rm_65_demo/scripts/__pycache__
 src/aruco_ros
