@@ -1,0 +1,20 @@
+{
+    "cmake.ignoreCMakeListsMissing": true,
+    "files.associations": {
+        "*.cpp": "cpp",
+        "unordered_map": "cpp"
+    },
+    "cSpell.words": [
+        "arctan",
+        "asanyarray",
+        "COEFFS",
+        "GLIP",
+        "huangting",
+        "imshow",
+        "LBUTTONDOWN",
+        "linalg",
+        "wavfile",
+        "wxyz",
+        "zhangjs"
+    ]
+}

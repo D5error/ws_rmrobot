@@ -2,7 +2,6 @@ build
 logs
 .catkin_tools
 .venv
-.vscode
 devel
 temp.wav
 temp.txt
