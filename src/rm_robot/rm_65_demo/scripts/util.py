@@ -19,12 +19,20 @@ from rm_msgs.msg import MoveJ_P, Plan_State, Hand_Angle, Hand_Speed
 
 class Robot:
     # 服务器信息
-    sftp_ip = '172.25.74.21'  # 替换为你的服务器IP地址
+    # sftp_ip = '172.25.74.21'  # 替换为你的服务器IP地址
+    # sftp_port = 22  # SFTP通常使用SSH端口22
+    # username = 'zhangjs'  # SFTP用户名
+    # password = 'zjs_server634'  # SFTP密码
+    # remote_dir = '/home/zhangjs/GLIP/input_try1' # 远程目录路径
+    # remote_txt_path = r'/home/zhangjs/GLIP/output_image/ii7_out_bbox.txt' # 服务器上的文件路径
+
+
+    sftp_ip = '10.0.0.2'  # 替换为你的服务器IP地址
     sftp_port = 22  # SFTP通常使用SSH端口22
-    username = 'zhangjs'  # SFTP用户名
-    password = 'zjs_server634'  # SFTP密码
-    remote_dir = '/home/zhangjs/GLIP/input_try1' # 远程目录路径
-    remote_txt_path = r'/home/zhangjs/GLIP/output_image/ii7_out_bbox.txt' # 服务器上的文件路径
+    username = 'abcd'  # SFTP用户名
+    password = 'a'  # SFTP密码
+    remote_dir = '/home/Ubuntu/桌面/GLIP/input_try1' # 远程目录路径
+    remote_txt_path = r'/home/Ubuntu/桌面/GLIP/output_image/ii7_out_bbox.txt' # 服务器上的文件路径
 
 
     def __init__(self):
@@ -485,3 +493,4 @@ class Point:
     
     def get_xyz(self):
         return self.x, self.y, self.z
+    

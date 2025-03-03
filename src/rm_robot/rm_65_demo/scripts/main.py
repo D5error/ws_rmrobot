@@ -23,11 +23,11 @@ hand_parameters = Hand_parameters(
 def main():
     robot = Robot()
 
-    # 外参矩阵和内参矩阵
-    camera_matrix, extrinsic_matrix = robot.get_camera_extrinsic_matrix()
+    # # 外参矩阵和内参矩阵
+    # camera_matrix, extrinsic_matrix = robot.get_camera_extrinsic_matrix()
 
-    # # 声音识别
-    robot.voice_translate(seconds = 3, model="medium")
+    # # # 声音识别
+    # robot.voice_translate(seconds = 3, model="medium")
 
     # 获取物体坐标
     boundingbox_u, boundingbox_v, depth = robot.get_boundingbox(8)
@@ -88,5 +88,5 @@ def test():
     robot.grip_open()
 
 if __name__ == "__main__":
-    # main()
-    test()
+    main()
+    # test()
