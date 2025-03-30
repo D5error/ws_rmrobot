@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from util import *
 # 长度单位：米
 # 角单位：度

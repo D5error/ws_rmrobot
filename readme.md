@@ -17,7 +17,7 @@ rosrun rm_65_demo api_Get_Arm_State_demo
 
 
 cd ~/ws_rmrobot
-source devel/setup.bash 
+source ~/ws_rmrobot/devel/setup.bash 
 rosrun rm_65_demo main.py
 
 
