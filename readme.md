@@ -5,19 +5,15 @@
 # start ROS system
 roscore
 
+# change to ROS workspace directory
+source ~/ws_rmrobot/devel/setup.bash 
+rosrun rm_65_demo 
 2. 
-cd ~/ws_rmrobot # change to ROS workspace directory
-source devel/setup.bash # load the environment settings for the workspace
-rosrun rm_driver rm_driver # connect to rm_65
+
+source ~/ws_rmrobot/devel/setup.bash && rosrun rm_driver rm_driver 
 
 3. 
-cd ~/ws_rmrobot
-source devel/setup.bash 
 rosrun rm_65_demo api_Get_Arm_State_demo
-
-
-cd ~/ws_rmrobot
-source ~/ws_rmrobot/devel/setup.bash 
 rosrun rm_65_demo main.py
 
 
@@ -45,15 +41,8 @@ rostopic echo /aruco_single/pose # 返回的位姿
 ```bash
 cd ~/ws_rmrobot
 catkin build
-
-
-cd ~/ws_rmrobot/src/
-rosdep install -y --from-paths . --ignore-src --rosdistro melodic -r
-cd ~/ws_rmrobot
-catkin init
-catkin build rm_msgs
-catkin build
 ```
+
 ## realsence
 ```bash
 cd ~/catkin_ws

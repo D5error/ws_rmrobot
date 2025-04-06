@@ -1,0 +1,15 @@
+{
+    "subscribe_seconds": 1,
+    
+    "finger_speed": 150,
+    "finger_speed_publish_seconds": 1,
+    "finger_angle_publish_seconds": 1,
+
+    "hand_z_offset": 0.19,
+    "hand_downward_angle": 65,
+    "hand_y_offset": -0.005,
+    "hand_z_rotation": 19,
+
+
+    "arm_speed": 0.07
+}

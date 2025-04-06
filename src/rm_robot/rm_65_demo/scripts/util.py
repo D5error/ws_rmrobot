@@ -11,6 +11,7 @@ import paramiko
 import threading
 import numpy as np
 import sounddevice as sd
+
 import pyrealsense2 as rs
 from std_msgs.msg import Bool
 import scipy.io.wavfile as wav

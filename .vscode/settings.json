@@ -16,5 +16,6 @@
         "wavfile",
         "wxyz",
         "zhangjs"
-    ]
+    ],
+    "python.terminal.activateEnvironment": true
 }

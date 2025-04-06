@@ -12,9 +12,9 @@ void GetArmState_Callback(const rm_msgs::Arm_Current_State msg)
     // 将接收到的消息打印出来，显示是否执行成功
     // ROS_INFO("joint state is: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]\n", msg.joint[0],msg.joint[1],msg.joint[2],msg.joint[3],msg.joint[4],msg.joint[5]);
     // ROS_INFO("pose state: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]\n", msg.Pose[0],msg.Pose[1],msg.Pose[2],msg.Pose[3],msg.Pose[4],msg.Pose[5]);
-    ROS_INFO("x = %.2f, y = %.2f, z = %.2f\n", msg.Pose[0],msg.Pose[1],msg.Pose[2]);
+    ROS_INFO("x = %.3f, y = %.3f, z = %.3f\n", msg.Pose[0],msg.Pose[1],msg.Pose[2]);
 
-    // ROS_INFO("rpy angle (PI): [%f, %f, %f]\n\n", msg.Pose[3]*180/PI, msg.Pose[4]*180/PI, msg.Pose[5]*180/PI);
+    ROS_INFO("rpy angle (PI): [%f, %f, %f]\n\n", msg.Pose[3]*180/PI, msg.Pose[4]*180/PI, msg.Pose[5]*180/PI);
     
     // ROS_INFO("arm_err is:%d\n", msg.arm_err);
     // ROS_INFO("sys_err is:%d\n", msg.sys_err);
