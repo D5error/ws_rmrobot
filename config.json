@@ -1,4 +1,8 @@
 {
+    "voice_record_path": "temp.wav",
+
+
+
     "subscribe_seconds": 1,
     
     "finger_speed": 150,

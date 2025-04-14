@@ -1,234 +1,497 @@
 #!/usr/bin/env python
 
+import re
+import os
+import cv2
+import time
 import math
-# import cv2
 import rospy
-from rm_msgs.msg import MoveJ_P, Plan_State
+import atexit 
+import paramiko
+import threading
 import numpy as np
+import sounddevice as sd
+
+import pyrealsense2 as rs
+from std_msgs.msg import Bool
+import scipy.io.wavfile as wav
+from scipy.spatial.transform import Rotation as R
+from rm_msgs.msg import MoveJ_P, Plan_State, Hand_Angle, Hand_Speed
+
+class Robot:
+    # 服务器信息
+    # sftp_ip = '172.25.74.21'  # 替换为你的服务器IP地址
+    # sftp_port = 22  # SFTP通常使用SSH端口22
+    # username = 'zhangjs'  # SFTP用户名
+    # password = 'zjs_server634'  # SFTP密码
+    # remote_dir = '/home/zhangjs/GLIP/input_try1' # 远程目录路径
+    # remote_txt_path = r'/home/zhangjs/GLIP/output_image/ii7_out_bbox.txt' # 服务器上的文件路径
 
 
-# 内参矩阵
-camera_matrix = np.array([
-    [382.19186401, 0., 323.26159668],
-    [  0., 382.19186401, 236.59973145],
-    [  0., 0., 1. ]
-])
-
-extrinsic_matrix = np.array([
-    [-0.56439602,  0.71270583 ,-0.41654235, -0.34763512],
-    [ 0.80804883,  0.37375544, -0.45537234 , 0.34916128],
-    [-0.16886155, -0.5935969,  -0.78684719  ,0.48239205],
-    [ 0.      ,    0.       ,   0.    ,      1.        ]
-])
-
-# # 畸变系数
-# dist_coeffs = np.array([0., 0., 0., 0., 0.]) 
-
-# # -40, 0, 0; -0.039, -0.034, 0.321
-# # -30, 0, 0; -0.068, 0.005, 0.306
-# # -30, -30, 0; -0.193, -0.064, 0.358
-# # -40, -30, 0; -0.160, -0.114, 0.375
-
-# # 世界坐标和像素坐标，用来确定相机位姿
-# x1, y1, z1 = -0.4, 0, 0
-# u1, v1 = -0.039, -0.034
-
-# x2, y2, z2 =-0.3, 0, 0
-# u2, v2 =-0.068, 0.005
-
-# x3, y3, z3 =-0.3, -0.30, 0
-# u3, v3 = -0.193, -0.064
-
-# x4, y4, z4 =-0.4, -0.30, 0
-# u4, v4 =-0.160, -0.114
+    sftp_ip = '10.0.0.2'  # 替换为你的服务器IP地址
+    sftp_port = 22  # SFTP通常使用SSH端口22
+    username = 'abcd'  # SFTP用户名
+    password = 'a'  # SFTP密码
+    remote_dir = '/home/Ubuntu/桌面/GLIP/input_try1' # 远程目录路径
+    remote_txt_path = r'/home/Ubuntu/桌面/GLIP/output_image/ii7_out_bbox.txt' # 服务器上的文件路径
 
 
-# # 已知的 3D 点（空间坐标）
-# object_points = np.array([
-#     [x1, y1, z1],
-#     [x2, y2, z2],
-#     [x3, y3, z3],
-#     [x4, y4, z4],
-# ], dtype=np.float32)
+    def __init__(self):
+        rospy.init_node('d5_python_pub', anonymous=True)
+        self.hand_angle_pub = rospy.Publisher("/rm_driver/Hand_SetAngle",Hand_Angle, queue_size=10) # 灵巧手角度发布
+        self.hand_speed_pub = rospy.Publisher("/rm_driver/Hand_SpeedAngle", Hand_Speed, queue_size=10) # 灵巧手速度发布
+        self.move_hand_pub = rospy.Publisher('/rm_driver/MoveJ_P_Cmd', MoveJ_P, queue_size=10)
 
-# # 对应的 2D 图像点
-# image_points = np.array([
-#     [u1, v1],
-#     [u2, v2],
-#     [u3, v3],
-#     [u4, v4],
-# ], dtype=np.float32)
+        self.sleep_time = 1
 
 
-def publish_to_ros(pos_x, pos_y, pos_z, ori_x, ori_y, ori_z, ori_w, speed):
-    def plan_state_callback(msg):
-        if msg.state:
-            rospy.loginfo("*******Plan State OK")
-        else:
-            rospy.loginfo("*******Plan State Fail")
+    def grip_control(self, thumb=1000, index_finger=1000, middle_finger=1000, ring_finger=1000, little_finger=1000, thumb_rotation=0, hand_speed=150):
+        def grip_callback(msg):
+            if msg:
+                rospy.loginfo("grip success")
+            else:
+                rospy.loginfo("grip fail")
+            grip_control_ok_event.set()
+
+
+
+        rospy.Subscriber("/rm_driver/Set_Hand_Angle_Result", Bool, grip_callback)
+
+        # 发布速度
+        time.sleep(self.sleep_time)
+        hand_speed_msg = Hand_Speed()
+        hand_speed_msg.hand_speed = hand_speed
+        self.hand_speed_pub.publish(hand_speed_msg)
+
+        # 发布角度
+        time.sleep(self.sleep_time)
+        hand_angle = [little_finger, ring_finger, middle_finger, index_finger, thumb, thumb_rotation]
+        hand_angle_msg = Hand_Angle()
+        hand_angle_msg.hand_angle = hand_angle
+        rospy.loginfo("try to grip_control")
+        self.hand_angle_pub.publish(hand_angle_msg)
+
+        grip_control_ok_event = threading.Event()
+        grip_control_ok_event.wait()
+        rospy.loginfo("grip_control complete")
+
+    def grip_open(self, hand_speed=150):
+        self.grip_control(thumb=1000, index_finger=1000, middle_finger=1000, ring_finger=1000, little_finger=1000, thumb_rotation=0, hand_speed=hand_speed)
+
+    def get_boundingbox(self, duration):
+        def get_color_depth_image():
+            # 初始化Realsense管道
+            pipeline = rs.pipeline()
+            config = rs.config()
+
+            # 配置相机流（颜色流和深度流）
+            config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+            config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+
+            # 启动管道
+            pipeline.start(config)
+
+            # 获取帧
+            frames = pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            depth_frame = frames.get_depth_frame()
+
+            # 转换为numpy数组
+            color_image = np.asanyarray(color_frame.get_data())
+            depth_image = np.asanyarray(depth_frame.get_data())
+
+            pipeline.stop()
+            cv2.destroyAllWindows()
+            
+            return color_image, depth_image
+
+        def upload_img_to_server():
+            # 本地文件列表
+            local_files = [
+                r"./temp.jpg",
+                r"./temp.txt"
+            ]
+
+            local_txt_path = r"./ii7_out_bbox.txt"
+
+
+            # 创建SSH客户端并连接到SFTP服务器
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(sftp_ip, sftp_port, username, password)
+
+            # 打开SFTP客户端
+            sftp = client.open_sftp()
+
+            # 确保远程目录存在
+            try:
+                sftp.stat(remote_dir)
+            except IOError:
+                sftp.mkdir(remote_dir)
+
+            # 上传多个文件
+            for local_file in local_files:
+                # 获取文件名
+                file_name = os.path.basename(local_file)  # 使用 os.path.basename()
+                # 构建远程文件路径
+                remote_file_path = f'{remote_dir}/{file_name}'
+
+                # 上传文件
+                try:
+                    sftp.put(local_file, remote_file_path)
+                    print(f"文件 {file_name} 上传成功")
+                except Exception as e:
+                    print(f"上传文件 {file_name} 失败: {e}")
+
+            # 关闭SFTP和SSH连接
+            sftp.close()
+            client.close()
+            print("文件上传成功")
+
+            print(f"等待 {duration} 秒...")
+            time.sleep(duration)
+
+
+
+
+            # 创建SSH客户端并连接到SFTP服务器
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(sftp_ip, sftp_port, username, password)
+
+            # 打开SFTP客户端
+            sftp = client.open_sftp()
+
+            # 下载文件
+            sftp.get(remote_txt_path, local_txt_path)
+
+            # 关闭SFTP和SSH连接
+            sftp.close()
+            client.close()
+            print("文件下载成功")
+            
+            return
+
+        def extract_bounding_boxes(file_path, target_label):
+            top_left_coords = []  # 存储左上角坐标
+            bottom_right_coords = []  # 存储右下角坐标
+
+            # 打开并读取文件内容
+            with open(file_path, 'r') as file:
+                lines = file.readlines()
+
+            # 遍历每一行，提取目标Label的BoundingBox
+            for line in lines:
+                match = re.match(r"Label: (\d+), Score: [^,]+, BoundingBox: \(([^)]+)\), \(([^)]+)\)", line)
+                if match:
+                    label = int(match.group(1))
+                    if label == target_label:
+                        # 解析左上角坐标
+                        top_left = tuple(map(float, match.group(2).strip("()").split(',')))
+                        top_left_coords.append(top_left)
+                        # 解析右下角坐标
+                        bottom_right = tuple(map(float, match.group(3).strip("()").split(',')))
+                        bottom_right_coords.append(bottom_right)
+
+            return top_left_coords, bottom_right_coords
         
-    rospy.init_node('d5_move_arm_pub', anonymous=True)
-
-    # 发布
-    pub = rospy.Publisher('/rm_driver/MoveJ_P_Cmd', MoveJ_P, queue_size=10)
-
-    # 订阅
-    rospy.Subscriber("/rm_driver/Plan_State", Plan_State, plan_state_callback)
-
-    rospy.sleep(2.0)
-
-    moveJ_P_TargetPose = MoveJ_P()
-    moveJ_P_TargetPose.Pose.position.x = pos_x
-    moveJ_P_TargetPose.Pose.position.y = pos_y
-    moveJ_P_TargetPose.Pose.position.z = pos_z
-    moveJ_P_TargetPose.Pose.orientation.x = ori_x
-    moveJ_P_TargetPose.Pose.orientation.y = ori_y
-    moveJ_P_TargetPose.Pose.orientation.z = ori_z
-    moveJ_P_TargetPose.Pose.orientation.w = ori_w
-    moveJ_P_TargetPose.speed = speed
-
-    # 发送指令
-    rospy.loginfo("Publishing d5_move_arm by python...")
-    pub.publish(moveJ_P_TargetPose)
-
-    rospy.spin()
-
-
-def get_wxyz_from_rpy(roll, pitch, yaw):
-    # 将角度转换为弧度
-    roll = np.radians(roll)
-    pitch = np.radians(pitch)
-    yaw = np.radians(yaw)
-
-    # 计算四元数
-    cy = np.cos(yaw / 2)
-    sy = np.sin(yaw / 2)
-    cp = np.cos(pitch / 2)
-    sp = np.sin(pitch / 2)
-    cr = np.cos(roll / 2)
-    sr = np.sin(roll / 2)
-
-    w = cr * cp * cy + sr * sp * sy
-    x = sr * cp * cy - cr * sp * sy
-    y = cr * sp * cy + sr * cp * sy
-    z = cr * cp * sy - sr * sp * cy
-
-    return w, x, y, z
-
-
-def get_end_from_obj(obj_x, obj_y, obj_z, beta, hand_length, height, offset, hand_z_rotation):
-    def sin(deg):
-        ret_deg = math.sin(math.radians(deg))
-        return ret_deg
-
-    def cos(deg):
-        ret_deg = math.cos(math.radians(deg))
-        return ret_deg
-    
-    def rpy_after_z_rotation(r, p, y, a):
-        # 转换为弧度
-        r, p, y, a = np.radians([r, p, y, a])
         
-        # 构造旋转矩阵
-        R_x = np.array([
-            [1, 0, 0],
-            [0, np.cos(r), -np.sin(r)],
-            [0, np.sin(r), np.cos(r)]
-        ])
-        R_y = np.array([
-            [np.cos(p), 0, np.sin(p)],
-            [0, 1, 0],
-            [-np.sin(p), 0, np.cos(p)]
-        ])
-        R_z = np.array([
-            [np.cos(y), -np.sin(y), 0],
-            [np.sin(y), np.cos(y), 0],
+        color_image, depth_image = get_color_depth_image()
+
+        # 存储彩色图片
+        jpg_path = r"./temp.jpg"
+        if os.path.exists(jpg_path):
+            os.remove(jpg_path)
+        cv2.imwrite(jpg_path, color_image)
+        print("等待图片储存")
+        time.sleep(2)
+
+        upload_img_to_server()
+
+        file_path = r"./ii7_out_bbox.txt"  # 替换为你的文件路径
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        target_label = 1  # 替换为你想要的Label
+        top_left_boxes, bottom_right_boxes = extract_bounding_boxes(file_path, target_label)
+
+        # 目标的bounding box坐标为 (x1, y1) 到 (x2, y2)
+        x1, y1, x2, y2 = top_left_boxes[0][0], top_left_boxes[0][1], bottom_right_boxes[0][0], bottom_right_boxes[0][1]
+
+        u = (x1 + x2) / 2
+        v = (y1 + y2) / 2
+
+        # 计算bounding box中心的深度
+        depth = depth_image[int(v), int(u)] * 0.001  # 单位米
+        
+        return u, v, depth
+
+
+    def voice_translate(self, seconds, model="medium"):
+        def record_audio(duration, output_file):
+            """
+            录制音频并保存为 MP3 文件
+            :param duration: 录音时长（秒）
+            :param output_file: 保存的文件名
+            """
+            try:
+                print(f"开始录音... 持续 {duration} 秒")
+                fs = 44100  # 采样率
+                audio_data = sd.rec(int(duration * fs), samplerate=fs, channels=2, dtype='int16')
+                sd.wait()  # 等待录音完成
+                wav.write(output_file, fs, audio_data)
+                print(f"录音完成，保存为 {output_file}")
+
+            except Exception as e:
+                print(f"录音失败: {e}")
+
+        def run_whisper(input_file, language, output_dir, output_format, model, task):
+            """
+            执行 whisper 命令
+            :param model_dir: 模型路径
+            :param input_file: 音频文件路径
+            :param language: 语言代码（如 'zh'）
+            :param output_dir: 输出目录
+            :param output_format: 输出格式（如 'txt'）
+            :param model: 模型类型（如 'medium'）
+            :param task: 任务类型（如 'translate'）
+            """
+            try:
+                command = (
+                    f"whisper {input_file} --language {language} "
+                    f"--output_dir {output_dir} --output_format {output_format} "
+                    f"--model {model} --task {task}"
+                )
+                print(f"运行命令: {command}")
+                os.system(command)
+                print("Whisper 执行完成")
+            except Exception as e:
+                print(f"运行 whisper 时出错: {e}")
+
+
+        # 设置录音时长和文件名
+        output_file = r"./temp.wav"
+
+        # 录音并保存为 MP3
+        if os.path.exists(output_file):
+            os.remove(output_file)
+        record_audio(seconds, output_file)
+
+        # 执行 whisper 命令
+        run_whisper(
+            input_file=output_file,
+            language="zh",
+            output_dir=r".",
+            output_format="txt",
+            model=model,
+            task="translate"
+        )
+
+
+    def move_hand(self, hand_x, hand_y, hand_z, speed, hand_parameters):
+        def move_hand_callback(msg):
+            if msg.state:
+                rospy.loginfo("*******Move Hand OK")
+            else:
+                rospy.loginfo("*******Move Hand Fail")
+            move_hand_ok_event.set()
+
+        rospy.Subscriber("/rm_driver/Plan_State", Plan_State, move_hand_callback)
+        rospy.sleep(self.sleep_time)
+        hand_point = Point(x=hand_x, y=hand_y, z=hand_z)
+        end_point, end_roll, end_pitch, end_yaw = self.hand_point_to_end_point(hand_point, hand_parameters)
+        end_ori_w, end_ori_x, end_ori_y, end_ori_z = self.rpy_to_wxyz(end_roll, end_pitch, end_yaw)
+
+        moveJ_P_TargetPose = MoveJ_P()
+        moveJ_P_TargetPose.Pose.position.x = end_point.x
+        moveJ_P_TargetPose.Pose.position.y = end_point.y
+        moveJ_P_TargetPose.Pose.position.z = end_point.z
+        moveJ_P_TargetPose.Pose.orientation.x = end_ori_x
+        moveJ_P_TargetPose.Pose.orientation.y = end_ori_y
+        moveJ_P_TargetPose.Pose.orientation.z = end_ori_z
+        moveJ_P_TargetPose.Pose.orientation.w = end_ori_w
+        moveJ_P_TargetPose.speed = speed
+
+        # 发送指令
+        rospy.loginfo("try to move hand")
+        self.move_hand_pub.publish(moveJ_P_TargetPose)
+
+        move_hand_ok_event = threading.Event()
+        move_hand_ok_event.wait()
+        rospy.loginfo("move hand complete")
+
+
+    def hand_point_to_end_point(self, hand_point, hand_parameters):
+        '''
+        y_offset是hand坐标系相对end坐标系“正”y方向的偏移量
+        z_rotation是hand坐标系相对end坐标系shun时针转动的角度
+        '''
+        def sin(deg):
+            ret = math.sin(math.radians(deg))
+            return ret
+
+        def cos(deg):
+            ret = math.cos(math.radians(deg))
+            return ret
+
+        def arctan(x, y):
+            ret_deg = math.degrees(math.atan2(y, x))
+            return ret_deg
+
+
+        hand_length = hand_parameters.hand_length
+        downward_angle = hand_parameters.downward_angle
+        y_offset = hand_parameters.y_offset
+        z_rotation = hand_parameters.z_rotation
+
+        if downward_angle >= 90 or downward_angle < 0:
+            raise ValueError(f"向下角度{downward_angle}应该在0度到90度之间")
+
+        # 位置
+        hand_x, hand_y, hand_z = hand_point.get_xyz()
+        theta = arctan(hand_x, hand_y) # 物体与世界坐标系x轴正方向的夹角，[-180°, 180°]
+        end_pos_x = hand_x - hand_length * cos(downward_angle) * cos(theta) + y_offset * cos(theta - 90)
+        end_pos_y = hand_y - hand_length * cos(downward_angle) * sin(theta) + y_offset * sin(theta - 90)
+        end_pos_z = hand_z + hand_length * sin(downward_angle)
+        end_point = Point(end_pos_x, end_pos_y, end_pos_z)
+        
+        # 姿态，huangting
+        end_roll = 0
+        end_pitch = -90 - downward_angle
+        end_yaw = 180 + theta
+        rotation_matrix = R.from_euler('xyz', [end_roll, end_pitch, end_yaw], degrees=True).as_matrix()
+        rotate_z_matrix = np.array([
+            [cos(z_rotation), sin(z_rotation), 0],
+            [-sin(z_rotation),cos(z_rotation), 0],
             [0, 0, 1]
         ])
-        R_add = np.array([
-            [np.cos(a), -np.sin(a), 0],
-            [np.sin(a), np.cos(a), 0],
-            [0, 0, 1]
-        ])
-        
-        # 计算新矩阵
-        R_initial = R_z @ R_y @ R_x
-        R_new = R_initial @ R_add
-        
-        # 提取新的RPY
-        new_pitch = -np.arcsin(R_new[2, 0])
-        new_roll = np.arctan2(R_new[2, 1], R_new[2, 2])
-        new_yaw = np.arctan2(R_new[1, 0], R_new[0, 0])
-        
-        return np.degrees(new_roll), np.degrees(new_pitch), np.degrees(new_yaw)
+        end_matrix = rotation_matrix @ rotate_z_matrix
+        end_roll, end_pitch, end_yaw = R.from_matrix(end_matrix).as_euler('xyz', degrees=True)
 
-    # 异常处理
-    if not(beta >= 0 and beta <= 90) or not(height > 0) or not (hand_length > 0):
-        return None
+        return end_point, end_roll, end_pitch, end_yaw
 
 
-    # 物体与世界坐标系x轴正方向的夹角，[-180°, 180°]
-    theta = math.degrees(math.atan2(obj_y, obj_x))
+    def rpy_to_wxyz(self, roll, pitch, yaw):
+        # 将角度转换为弧度
+        roll = np.radians(roll)
+        pitch = np.radians(pitch)
+        yaw = np.radians(yaw)
 
-    # 末端位置
-    end_world_x = (obj_x - hand_length * cos(beta) * cos(theta)) + offset * cos(theta - 90)
-    end_world_y = (obj_y - hand_length * cos(beta) * sin(theta)) + offset * sin(theta - 90)
-    end_world_z = obj_z + height + hand_length * sin(beta)
+        # 计算四元数
+        cy = np.cos(yaw / 2)
+        sy = np.sin(yaw / 2)
+        cp = np.cos(pitch / 2)
+        sp = np.sin(pitch / 2)
+        cr = np.cos(roll / 2)
+        sr = np.sin(roll / 2)
 
-    # 末端姿态（RPY角）
-    end_roll = 0
-    end_pitch = -(90 + beta)
-    end_yaw = 180 + theta
+        w = cr * cp * cy + sr * sp * sy
+        x = sr * cp * cy - cr * sp * sy
+        y = cr * sp * cy + sr * cp * sy
+        z = cr * cp * sy - sr * sp * cy
 
-    # 沿新z轴转hand_z_rotation
-    end_roll, end_pitch, end_yaw = rpy_after_z_rotation(end_roll, end_pitch, end_yaw, hand_z_rotation)
-
-    return end_world_x, end_world_y, end_world_z, end_roll, end_pitch, end_yaw
+        return w, x, y, z
 
 
-def get_world_coords_from_boundingbox(u, v, depth):
-    """
-    # 获取相机内参
-    depth_intrinsics, color_intrinsics = get_camera_intrinsics()
-
-    # 内参
-    fx, fy, cx, cy = depth_intrinsics.fx, depth_intrinsics.fy, depth_intrinsics.ppx, depth_intrinsics.ppy
-    k1, k2, p1, p2, k3 = depth_intrinsics.coeffs # 畸变系数
-    K = np.array([ # 内参矩阵
-        [fx, 0, cx],
-        [0, fy, cy],
-        [0, 0, 1]
-    ])
-    dist_coeffs = np.array([k1, k2, p1, p2, k3]) # 构建畸变系数向量
-    """
-
-    # # 使用 PnP 求解 R 和 T
-    # _, rotation_vector, translation_vector = cv2.solvePnP(
-    #     object_points, image_points, K, dist_coeffs
-    # )
-    # R, _ = cv2.Rodrigues(rotation_vector)
-    # T = translation_vector.T.flatten()
-
-    #     # 计算 K 的逆
-    # K_inv = np.linalg.inv(K)
-    
-    # # 将图像坐标转换为相机坐标
-    # pixel_coords = np.array([u, v, 1])
-    # camera_coords = K_inv @ pixel_coords * depth
-    
-    # # 将相机坐标转换为世界坐标
-    # world_coords = np.linalg.inv(R) @ (camera_coords - T)
-
+    def boundingbox_to_world_coordinate(self, u, v, depth, camera_matrix, extrinsic_matrix):
         # 像素坐标 -> 相机坐标
-    pixel_coords = np.array([u, v, 1])
-    cam_coords = depth * np.linalg.inv(camera_matrix) @ pixel_coords
+        pixel_coords = np.array([u, v, 1])
+        cam_coords = depth * np.linalg.inv(camera_matrix) @ pixel_coords
 
-    # 相机坐标 -> 世界坐标
-    cam_coords_h = np.append(cam_coords, 1)  # 转为齐次坐标
-    world_coords_h = np.linalg.inv(extrinsic_matrix) @ cam_coords_h
+        # 相机坐标 -> 世界坐标
+        cam_coords_h = np.append(cam_coords, 1)  # 转为齐次坐标
+        world_coords_h = np.linalg.inv(extrinsic_matrix) @ cam_coords_h
 
-    # 转为非齐次坐标
-    world_coords = world_coords_h[:3] / world_coords_h[3]
-    return world_coords
+        # 转为非齐次坐标
+        world_coords = world_coords_h[:3] / world_coords_h[3]
 
-    return world_coords
+        return world_coords
+
+
+    def get_camera_extrinsic_matrix(self):
+        # Distortion coefficients (set to zero for simplicity)
+        DIST_COEFFS = np.array([[0, 0, 0, 0]])
+
+        # 3D world coordinate system points
+        POINT_3D_LIST = np.float32([(-0.5, -0.15, 0), (-0.5, 0.15, 0), 
+                                    (-0.3, 0.15, 0), (-0.3, -0.15, 0)])
+
+        # Initialize RealSense pipeline
+        pipeline = rs.pipeline()
+        config = rs.config()
+        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+
+        # Start streaming
+        profile = pipeline.start(config)
+        time.sleep(2)
+
+        # Mouse click event handler
+        POINT_2D_LIST = []
+        def mouse_event(event, x, y, flags, param):
+            if event == cv2.EVENT_LBUTTONDOWN:
+                POINT_2D_LIST.append([x, y])
+
+        # Clean-up function to stop pipeline
+        @atexit.register
+        def clean():
+            pipeline.stop()
+            device = profile.get_device()
+            device.hardware_reset()
+            time.sleep(2)
+
+        # Get camera intrinsics
+        profile_t = profile.get_stream(rs.stream.color)
+        intr = profile_t.as_video_stream_profile().get_intrinsics()
+        CAMERA_MATRIX = np.array([[intr.fx, 0, intr.ppx], 
+                                [0, intr.fy, intr.ppy], 
+                                [0, 0, 1]])
+
+        while True:
+            frame = pipeline.wait_for_frames()
+            color_frame = frame.get_color_frame()
+            color_image = np.asanyarray(color_frame.get_data())
+                                                                    # 0 - - - 1
+            cv2.imshow("video", color_image)                         # |       |
+            cv2.setMouseCallback("video", mouse_event, color_image)  # 3 - - - 2
+
+            if len(POINT_2D_LIST) == 4:
+                break
+            if cv2.waitKey(1) == ord('q'):
+                break
+
+        cv2.destroyAllWindows()
+
+        # SolvePnP to get rvec and tvec
+        retval, rvec, tvec = cv2.solvePnP(POINT_3D_LIST, np.float32(POINT_2D_LIST), CAMERA_MATRIX, DIST_COEFFS)
+
+        # Convert rvec to rotation matrix
+        rmat, _ = cv2.Rodrigues(rvec)
+
+        # Build extrinsic matrix
+        extrinsic_matrix = np.eye(4)
+        extrinsic_matrix[:3, :3] = rmat
+        extrinsic_matrix[:3, 3] = tvec.flatten()
+
+        print(f"内参矩阵:\n{CAMERA_MATRIX}")
+        print(f"外参矩阵:\n{extrinsic_matrix}")
+
+        return CAMERA_MATRIX, extrinsic_matrix
+
+
+class Hand_parameters:
+    def __init__(self, downward_angle, hand_length, z_rotation, y_offset):
+        self.downward_angle = downward_angle
+        self.hand_length = hand_length
+        self.z_rotation = z_rotation
+        self.y_offset = y_offset
+            
+
+class Point:
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+    
+    def get_xyz(self):
+        return self.x, self.y, self.z
+

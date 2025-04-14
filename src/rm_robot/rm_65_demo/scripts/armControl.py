@@ -5,9 +5,7 @@ import math
 import threading
 import time
 from scipy.spatial.transform import Rotation as R
-
 import numpy as np
-
 import rospy
 from rm_msgs.msg import Plan_State, MoveJ_P
 
@@ -123,6 +121,7 @@ class ArmControl:
     def load_config(self):
         with open('config.json') as f:
             self.config = json.load(f)
+
 
 class Point:
     def __init__(self, x, y, z):

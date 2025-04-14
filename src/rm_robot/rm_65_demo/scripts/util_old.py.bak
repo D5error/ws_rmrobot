@@ -1,0 +1,234 @@
+#!/usr/bin/env python
+
+import math
+# import cv2
+import rospy
+from rm_msgs.msg import MoveJ_P, Plan_State
+import numpy as np
+
+
+# 内参矩阵
+camera_matrix = np.array([
+    [382.19186401, 0., 323.26159668],
+    [  0., 382.19186401, 236.59973145],
+    [  0., 0., 1. ]
+])
+
+extrinsic_matrix = np.array([
+    [-0.56439602,  0.71270583 ,-0.41654235, -0.34763512],
+    [ 0.80804883,  0.37375544, -0.45537234 , 0.34916128],
+    [-0.16886155, -0.5935969,  -0.78684719  ,0.48239205],
+    [ 0.      ,    0.       ,   0.    ,      1.        ]
+])
+
+# # 畸变系数
+# dist_coeffs = np.array([0., 0., 0., 0., 0.]) 
+
+# # -40, 0, 0; -0.039, -0.034, 0.321
+# # -30, 0, 0; -0.068, 0.005, 0.306
+# # -30, -30, 0; -0.193, -0.064, 0.358
+# # -40, -30, 0; -0.160, -0.114, 0.375
+
+# # 世界坐标和像素坐标，用来确定相机位姿
+# x1, y1, z1 = -0.4, 0, 0
+# u1, v1 = -0.039, -0.034
+
+# x2, y2, z2 =-0.3, 0, 0
+# u2, v2 =-0.068, 0.005
+
+# x3, y3, z3 =-0.3, -0.30, 0
+# u3, v3 = -0.193, -0.064
+
+# x4, y4, z4 =-0.4, -0.30, 0
+# u4, v4 =-0.160, -0.114
+
+
+# # 已知的 3D 点（空间坐标）
+# object_points = np.array([
+#     [x1, y1, z1],
+#     [x2, y2, z2],
+#     [x3, y3, z3],
+#     [x4, y4, z4],
+# ], dtype=np.float32)
+
+# # 对应的 2D 图像点
+# image_points = np.array([
+#     [u1, v1],
+#     [u2, v2],
+#     [u3, v3],
+#     [u4, v4],
+# ], dtype=np.float32)
+
+
+def publish_to_ros(pos_x, pos_y, pos_z, ori_x, ori_y, ori_z, ori_w, speed):
+    def plan_state_callback(msg):
+        if msg.state:
+            rospy.loginfo("*******Plan State OK")
+        else:
+            rospy.loginfo("*******Plan State Fail")
+        
+    rospy.init_node('d5_move_arm_pub', anonymous=True)
+
+    # 发布
+    pub = rospy.Publisher('/rm_driver/MoveJ_P_Cmd', MoveJ_P, queue_size=10)
+
+    # 订阅
+    rospy.Subscriber("/rm_driver/Plan_State", Plan_State, plan_state_callback)
+
+    rospy.sleep(2.0)
+
+    moveJ_P_TargetPose = MoveJ_P()
+    moveJ_P_TargetPose.Pose.position.x = pos_x
+    moveJ_P_TargetPose.Pose.position.y = pos_y
+    moveJ_P_TargetPose.Pose.position.z = pos_z
+    moveJ_P_TargetPose.Pose.orientation.x = ori_x
+    moveJ_P_TargetPose.Pose.orientation.y = ori_y
+    moveJ_P_TargetPose.Pose.orientation.z = ori_z
+    moveJ_P_TargetPose.Pose.orientation.w = ori_w
+    moveJ_P_TargetPose.speed = speed
+
+    # 发送指令
+    rospy.loginfo("Publishing d5_move_arm by python...")
+    pub.publish(moveJ_P_TargetPose)
+
+    rospy.spin()
+
+
+def get_wxyz_from_rpy(roll, pitch, yaw):
+    # 将角度转换为弧度
+    roll = np.radians(roll)
+    pitch = np.radians(pitch)
+    yaw = np.radians(yaw)
+
+    # 计算四元数
+    cy = np.cos(yaw / 2)
+    sy = np.sin(yaw / 2)
+    cp = np.cos(pitch / 2)
+    sp = np.sin(pitch / 2)
+    cr = np.cos(roll / 2)
+    sr = np.sin(roll / 2)
+
+    w = cr * cp * cy + sr * sp * sy
+    x = sr * cp * cy - cr * sp * sy
+    y = cr * sp * cy + sr * cp * sy
+    z = cr * cp * sy - sr * sp * cy
+
+    return w, x, y, z
+
+
+def get_end_from_obj(obj_x, obj_y, obj_z, beta, hand_length, height, offset, hand_z_rotation):
+    def sin(deg):
+        ret_deg = math.sin(math.radians(deg))
+        return ret_deg
+
+    def cos(deg):
+        ret_deg = math.cos(math.radians(deg))
+        return ret_deg
+    
+    def rpy_after_z_rotation(r, p, y, a):
+        # 转换为弧度
+        r, p, y, a = np.radians([r, p, y, a])
+        
+        # 构造旋转矩阵
+        R_x = np.array([
+            [1, 0, 0],
+            [0, np.cos(r), -np.sin(r)],
+            [0, np.sin(r), np.cos(r)]
+        ])
+        R_y = np.array([
+            [np.cos(p), 0, np.sin(p)],
+            [0, 1, 0],
+            [-np.sin(p), 0, np.cos(p)]
+        ])
+        R_z = np.array([
+            [np.cos(y), -np.sin(y), 0],
+            [np.sin(y), np.cos(y), 0],
+            [0, 0, 1]
+        ])
+        R_add = np.array([
+            [np.cos(a), -np.sin(a), 0],
+            [np.sin(a), np.cos(a), 0],
+            [0, 0, 1]
+        ])
+        
+        # 计算新矩阵
+        R_initial = R_z @ R_y @ R_x
+        R_new = R_initial @ R_add
+        
+        # 提取新的RPY
+        new_pitch = -np.arcsin(R_new[2, 0])
+        new_roll = np.arctan2(R_new[2, 1], R_new[2, 2])
+        new_yaw = np.arctan2(R_new[1, 0], R_new[0, 0])
+        
+        return np.degrees(new_roll), np.degrees(new_pitch), np.degrees(new_yaw)
+
+    # 异常处理
+    if not(beta >= 0 and beta <= 90) or not(height > 0) or not (hand_length > 0):
+        return None
+
+
+    # 物体与世界坐标系x轴正方向的夹角，[-180°, 180°]
+    theta = math.degrees(math.atan2(obj_y, obj_x))
+
+    # 末端位置
+    end_world_x = (obj_x - hand_length * cos(beta) * cos(theta)) + offset * cos(theta - 90)
+    end_world_y = (obj_y - hand_length * cos(beta) * sin(theta)) + offset * sin(theta - 90)
+    end_world_z = obj_z + height + hand_length * sin(beta)
+
+    # 末端姿态（RPY角）
+    end_roll = 0
+    end_pitch = -(90 + beta)
+    end_yaw = 180 + theta
+
+    # 沿新z轴转hand_z_rotation
+    end_roll, end_pitch, end_yaw = rpy_after_z_rotation(end_roll, end_pitch, end_yaw, hand_z_rotation)
+
+    return end_world_x, end_world_y, end_world_z, end_roll, end_pitch, end_yaw
+
+
+def get_world_coords_from_boundingbox(u, v, depth):
+    """
+    # 获取相机内参
+    depth_intrinsics, color_intrinsics = get_camera_intrinsics()
+
+    # 内参
+    fx, fy, cx, cy = depth_intrinsics.fx, depth_intrinsics.fy, depth_intrinsics.ppx, depth_intrinsics.ppy
+    k1, k2, p1, p2, k3 = depth_intrinsics.coeffs # 畸变系数
+    K = np.array([ # 内参矩阵
+        [fx, 0, cx],
+        [0, fy, cy],
+        [0, 0, 1]
+    ])
+    dist_coeffs = np.array([k1, k2, p1, p2, k3]) # 构建畸变系数向量
+    """
+
+    # # 使用 PnP 求解 R 和 T
+    # _, rotation_vector, translation_vector = cv2.solvePnP(
+    #     object_points, image_points, K, dist_coeffs
+    # )
+    # R, _ = cv2.Rodrigues(rotation_vector)
+    # T = translation_vector.T.flatten()
+
+    #     # 计算 K 的逆
+    # K_inv = np.linalg.inv(K)
+    
+    # # 将图像坐标转换为相机坐标
+    # pixel_coords = np.array([u, v, 1])
+    # camera_coords = K_inv @ pixel_coords * depth
+    
+    # # 将相机坐标转换为世界坐标
+    # world_coords = np.linalg.inv(R) @ (camera_coords - T)
+
+        # 像素坐标 -> 相机坐标
+    pixel_coords = np.array([u, v, 1])
+    cam_coords = depth * np.linalg.inv(camera_matrix) @ pixel_coords
+
+    # 相机坐标 -> 世界坐标
+    cam_coords_h = np.append(cam_coords, 1)  # 转为齐次坐标
+    world_coords_h = np.linalg.inv(extrinsic_matrix) @ cam_coords_h
+
+    # 转为非齐次坐标
+    world_coords = world_coords_h[:3] / world_coords_h[3]
+    return world_coords
+
+    return world_coords
