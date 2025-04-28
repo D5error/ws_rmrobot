@@ -12,13 +12,12 @@ from rm_msgs.msg import Plan_State, MoveJ_P
 
 class ArmControl:
     def __init__(self):
-        rospy.init_node('d5_arm_control', anonymous=True)
-
         # 发布手部控制消息
         self.move_hand_pub = rospy.Publisher('/rm_driver/MoveJ_P_Cmd', MoveJ_P, queue_size=10)
 
         # 加载配置文件
         self.load_config()
+
 
     def move_xyz(self, x, y, z):
         def move_hand_callback(msg):
@@ -118,6 +117,7 @@ class ArmControl:
         
         end_ori_w, end_ori_x, end_ori_y, end_ori_z = self.rpy_to_wxyz(end_roll, end_pitch, end_yaw)
         return end_point, end_ori_w, end_ori_x, end_ori_y, end_ori_z
+
     def load_config(self):
         with open('config.json') as f:
             self.config = json.load(f)
@@ -142,9 +142,11 @@ class HandParameters:
 
 
 if __name__ == '__main__':
+    rospy.init_node('d5_arm_control', anonymous=True)
+
     armControl = ArmControl()
     x = -0.4
     y = 0
-    z = 0.08
+    z = 0.1
     armControl.move_xyz(x, y, z)
     rospy.signal_shutdown("Program finished")  # 显式关闭 ROS 节点

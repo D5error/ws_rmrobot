@@ -7,7 +7,7 @@ roscore
 
 # change to ROS workspace directory
 source ~/ws_rmrobot/devel/setup.bash 
-rosrun rm_65_demo 
+rosrun rm_65_demo main.py
 2. 
 
 source ~/ws_rmrobot/devel/setup.bash && rosrun rm_driver rm_driver 

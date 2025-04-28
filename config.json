@@ -1,6 +1,9 @@
 {
     "voice_record_path": "temp.wav",
+    "voice_record_seconds": 4,
+    "voice_model": "medium",
 
+    "img_path": "./temp.jpg",
 
 
     "subscribe_seconds": 1,
@@ -9,9 +12,9 @@
     "finger_speed_publish_seconds": 1,
     "finger_angle_publish_seconds": 1,
 
-    "hand_z_offset": 0.19,
-    "hand_downward_angle": 65,
-    "hand_y_offset": -0.005,
+    "hand_z_offset": 0.235,
+    "hand_downward_angle": 50,
+    "hand_y_offset": -0.01,
     "hand_z_rotation": 19,
 
 

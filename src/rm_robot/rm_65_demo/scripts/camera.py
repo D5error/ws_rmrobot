@@ -1,4 +1,4 @@
-import re
+import json
 import os
 import cv2
 import time
@@ -9,16 +9,15 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import torch
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, AutoProcessor
 from qwen_vl_utils import process_vision_info
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-# 设置字体为常见的字体之一，例如 Arial
-plt.rcParams['font.family'] =  'Ubuntu'
 
-# 或者直接指定字体大小
-plt.rcParams['font.size'] = 12  # 调整为适合的大小
 
 class Camera:
     def __init__(self):
+        self.load_config()
+        self.init_camera()
+            
+
+
         # default: Load the model on the available device(s)
         # model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         #     "Qwen/Qwen2.5-VL-32B-Instruct", torch_dtype="auto", device_map="auto"
@@ -27,9 +26,11 @@ class Camera:
         # We recommend enabling flash_attention_2 for better acceleration and memory saving, especially in multi-image and video scenarios.
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             "Qwen/Qwen2.5-VL-7B-Instruct",
+            # torch_dtype=torch.bfloat16,
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
-            device_map="auto",
+            # device_map="auto",
+            device_map="cuda:0",
         )
 
         # default processer
@@ -82,7 +83,7 @@ class Camera:
         inputs = inputs.to("cuda")
 
         # Inference: Generation of the output
-        generated_ids = self.model.generate(**inputs, max_new_tokens=128)
+        generated_ids = self.model.generate(**inputs, max_new_tokens=64)
         generated_ids_trimmed = [
             out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
         ]
@@ -98,69 +99,29 @@ class Camera:
 
     # 获取RGBD图像
     def get_color_depth_image(self):
-        # 初始化RealSense管道
-        pipeline = rs.pipeline()
-        config = rs.config()
-
-        # 配置相机流（颜色流和深度流）
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-
-        # # 启动管道
-        # profile = pipeline.start(config)
-        # device = profile.get_device()
-        # device.hardware_reset()
-
-        try:
-            # 启动管道
-            profile = pipeline.start(config)
-            print("Pipeline started successfully")
-        except RuntimeError as e:
-            print(f"Failed to start pipeline: {e}")
-            return None, None
-        
-        device = profile.get_device()
-        print(f"Connected device: {device.get_info(rs.camera_info.name)}")
-
-        device.hardware_reset()
-
         # 获取帧
-        frames = pipeline.wait_for_frames()
+        frames = self.pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
         depth_frame = frames.get_depth_frame()
 
         # 转换为numpy数组
         color_image = np.asanyarray(color_frame.get_data())
         depth_image = np.asanyarray(depth_frame.get_data())
-
-        # pipeline.stop()
-        # cv2.destroyAllWindows()
         
         return color_image, depth_image
 
 
     # 获取bounding box的坐标
-    def get_coords(self, object_name, img_path):
-        # description = f'return "{object_name}" coords. return format: "[left_x,top_y,right_x,bottom_y]" (integer coordinates) or "null". Please follow the format strictly, do not json.'
+    def get_coords(self, object_name):
 
-        description = f"""
-            Return the bounding box coordinates of the object "{object_name}" in the image.
-            The coordinates should be in the format: [left_x,top_y,right_x,bottom_y] where:
-            - left_x: the x-coordinate of the left edge of the bounding box
-            - top_y: the y-coordinate of the top edge of the bounding box
-            - right_x: the x-coordinate of the right edge of the bounding box
-            - bottom_y: the y-coordinate of the bottom edge of the bounding box
-
-            All coordinates should be integer values. If the object is not found, return "null".
-            Please follow the format strictly and do not use JSON.
-        """
+        description = f"从图片中提取关键物体的boundingbox坐标：'{object_name}'，返回格式为：'左上x坐标,左上y坐标,右下x坐标,右下y坐标'。"
         messages = [
             {
                 "role": "robot",
                 "content": [
                     {
                         "type": "image",
-                        "image": img_path,
+                        "image": self.config["img_path"],
                     },
                     {
                         "type": "text", 
@@ -194,24 +155,31 @@ class Camera:
         )
 
         # 获取模型输出的boundbox坐标，并可视化到图像上
-        coords = output_text[0].strip('[]')
-        if coords == "null":
-            print(f"没有检测到{object_name}")
-            return None
-        
-        # 绘制图像和边框
-        # print(f"检测到{object_name}，bounding box坐标为：{coords}")
-        img = cv2.imread(img_path)
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # plt.imshow(img)
+        print(f"模型bounding box输出：{output_text[0]}")
+
+
+
+        # 去除多余的标记和空格
+        json_str = output_text[0].strip('```json\n').strip()
+
+        # 解析 JSON 数据
+        data = json.loads(json_str)
+
+        # 提取第一个对象的 bbox_2d
+        bbox = data[0]["bbox_2d"]
+
+        # 格式化为 x1y1x2y2
+        formatted_bbox = f"[{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}]"
+
+        print("提取后:", formatted_bbox)  # 输出: 243454289476
+
+
+
+        coords = formatted_bbox.strip('[]')
+        # if coords == "不存在":
+            # print(f"没有检测到{object_name}")
+            # return None
         x1, y1, x2, y2 = map(int, coords.split(","))
-        # rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor="r", facecolor="none")
-        # plt.gca().add_patch(rect)
-        # plt.show()
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.imshow('Image with border', img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
 
 
         return x1, y1, x2, y2
@@ -227,25 +195,34 @@ class Camera:
         color_image, depth_image = self.get_color_depth_image()
 
         # 存储彩色图片
-        jpg_path = r"./temp.jpg"
+        jpg_path = self.config["img_path"]
         if os.path.exists(jpg_path):
             os.remove(jpg_path)
         cv2.imwrite(jpg_path, color_image)
 
-        # 获取每个物体的标定框坐标
+        # 获取物体的标定框坐标
         bounding_boxes = {}
+        depths = {}
         for obj in objects:
-            coords = self.get_coords(obj, jpg_path)
+            coords = self.get_coords(obj)
             if coords:
                 bounding_boxes[obj] = coords
-        return bounding_boxes
+                depths[obj] = depth_image
 
+        return bounding_boxes, depths
+
+
+    def __del__(self):
+        # 释放资源
+        self.pipeline.stop()
+        self.model = None
+        self.processor = None
 
     # 坐标转换为世界坐标
-    def boundingbox_to_world_coordinate(self, u, v, depth, camera_matrix, extrinsic_matrix):
+    def boundingbox_to_world_coordinate(self, u, v, depth, intrinsic_matrix, extrinsic_matrix):
         # 像素坐标 -> 相机坐标
         pixel_coords = np.array([u, v, 1])
-        cam_coords = depth * np.linalg.inv(camera_matrix) @ pixel_coords
+        cam_coords = depth * np.linalg.inv(intrinsic_matrix) @ pixel_coords
 
         # 相机坐标 -> 世界坐标
         cam_coords_h = np.append(cam_coords, 1)  # 转为齐次坐标
@@ -325,6 +302,34 @@ class Camera:
         print(f"外参矩阵:\n{extrinsic_matrix}")
 
         return CAMERA_MATRIX, extrinsic_matrix
+
+    # 加载配置文件
+    def load_config(self):
+        with open('config.json') as f:
+            self.config = json.load(f)
+
+    # 初始化相机
+    def init_camera(self):
+        # 初始化RealSense管道
+        self.pipeline = rs.pipeline()
+        config = rs.config()
+
+        # 配置相机流（颜色流和深度流）
+        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+
+        try:
+            # 启动管道
+            profile = self.pipeline.start(config)
+
+        except RuntimeError as e:
+            print(f"Failed to start pipeline: {e}")
+            return None, None
+        
+        device = profile.get_device()
+        print(f"Connected device: {device.get_info(rs.camera_info.name)}")
+
+        device.hardware_reset()
 
 
 if __name__ == "__main__":

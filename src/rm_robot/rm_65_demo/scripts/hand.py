@@ -10,8 +10,6 @@ from rm_msgs.msg import Hand_Angle, Hand_Speed
 
 class Hand:
     def __init__(self):
-        rospy.init_node('d5_hand', anonymous=True)
-
         # 灵巧手角度发布
         self.hand_angle_pub = rospy.Publisher("/rm_driver/Hand_SetAngle",Hand_Angle, queue_size=10)
 
@@ -20,6 +18,8 @@ class Hand:
 
         # 加载配置文件
         self.load_config()
+
+        self.relax()
 
     def set_angles(self, hand_joint):
         """
@@ -57,12 +57,18 @@ class Hand:
         # 等待设置完成
         grip_control_ok_event.wait()
 
+    def relax(self):
+        self.set_angles([1000, 1000, 1000, 1000, 1000, 0])
+
     def load_config(self):
         with open('config.json') as f:
             self.config = json.load(f)
 
 
 if __name__ == '__main__':
+    rospy.init_node('d5_hand', anonymous=True)
+
+
     hand = Hand()
     # hand.set_angles([0, 0, 0, 0, 0, 0])
     hand.set_angles([1000, 1000, 1000, 1000, 1000, 0])

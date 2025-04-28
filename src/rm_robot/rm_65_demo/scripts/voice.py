@@ -9,7 +9,8 @@ class Voice:
         with open('config.json') as f:
             self.config = json.load(f)
 
-    def voice_translate(self, seconds, model="medium"):
+
+    def voice_translate(self):
         def record_audio(duration, output_file):
             """
             录制音频并保存为 MP3 文件
@@ -57,7 +58,7 @@ class Voice:
         # 录音并保存为 MP3
         if os.path.exists(output_file):
             os.remove(output_file)
-        record_audio(seconds, output_file)
+        record_audio(self.config["voice_record_seconds"], output_file)
 
         # 执行 whisper 命令
         run_whisper(
@@ -65,11 +66,11 @@ class Voice:
             language="zh",
             output_dir=r".",
             output_format="txt",
-            model=model,
+            model=self.config["voice_model"],
             task="translate"
         )
 
 
 if __name__ == "__main__":
     voice = Voice()
-    voice.voice_translate(seconds=5, model="medium")
+    voice.voice_translate()

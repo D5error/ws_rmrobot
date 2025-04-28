@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="caeaa77a-4ae2-41a9-9b04-2d747e84dea4" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/config.json" beforeDir="false" afterPath="$PROJECT_DIR$/config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/armControl.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/armControl.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/camera.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/camera.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/hand.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/hand.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/voice.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/rm_robot/rm_65_demo/scripts/voice.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "customColor": "",
+  "associatedIndex": 8
+}]]></component>
+  <component name="ProjectId" id="2w2LXyA15U7Ui6iosnE6ak1HVX4" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-348a24fa61fa-5312c7369657-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-251.23774.444" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="caeaa77a-4ae2-41a9-9b04-2d747e84dea4" name="更改" comment="" />
+      <created>1745234766630</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1745234766630</updated>
+    </task>
+    <servers />
+  </component>
+</project>
