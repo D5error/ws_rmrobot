@@ -43,30 +43,14 @@ class Camera:
         # processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-32B-Instruct", min_pixels=min_pixels, max_pixels=max_pixels)
 
     def analyze_sentence(self, sentence):
-        """
-        分析句子，提取关键物体名称。
-        """
         prompt = f"从句子中提取关键物体名称：'{sentence}'。返回格式为：['物体1', '物体2']。"
-        messages = [
-            {
-                "role": "robot",
-                "content": [
-                    {
-                        "type": "text", 
-                        "text": prompt
-                    },
-                ],
-            }
-        ]
-        # inputs = self.processor(
-        #     text=[prompt],
-        #     return_tensors="pt"
-        # )
-        # inputs = inputs.to("cuda")
-        # generated_ids = self.model.generate(**inputs, max_new_tokens=128)
-        # output_text = self.processor.batch_decode(
-        #     generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        # )
+        messages = [{
+            "role": "user",
+            "content": [{
+                "type": "text", 
+                "text": prompt
+            },],
+        }]
 
         # Preparation for inference
         text = self.processor.apply_chat_template(
@@ -91,9 +75,8 @@ class Camera:
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
 
-
         print(f"模型输出：{output_text[0]}")
-        objects = eval(output_text[0])  # 假设模型输出是符合Python列表格式的字符串
+        objects = eval(output_text[0])
         return objects
     
 
@@ -117,7 +100,7 @@ class Camera:
         description = f"从图片中提取关键物体的boundingbox坐标：'{object_name}'，返回格式为：'左上x坐标,左上y坐标,右下x坐标,右下y坐标'。"
         messages = [
             {
-                "role": "robot",
+                "role": "user",
                 "content": [
                     {
                         "type": "image",

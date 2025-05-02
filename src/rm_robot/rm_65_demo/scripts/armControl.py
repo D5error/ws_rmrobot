@@ -18,7 +18,6 @@ class ArmControl:
         # 加载配置文件
         self.load_config()
 
-
     def move_xyz(self, x, y, z):
         def move_hand_callback(msg):
             if msg.state:
@@ -32,7 +31,6 @@ class ArmControl:
         time.sleep(self.config["subscribe_seconds"])
         move_hand_ok_event = threading.Event()
         
-
         # 设置坐标
         print(f"设置手臂坐标 ({x}, {y}, {z})")
         hand_point = Point(x, y, z)

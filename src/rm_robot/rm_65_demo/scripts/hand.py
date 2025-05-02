@@ -24,8 +24,7 @@ class Hand:
     def set_angles(self, hand_joint):
         """
         设置手指关节角度
-        Args:
-            hand_joint: [little_finger, ring_finger, middle_finger, index_finger, thumb, thumb_rotation]
+        hand_joint: [little_finger, ring_finger, middle_finger, index_finger, thumb, thumb_rotation]
         """
         def grip_callback(msg):
             if msg:

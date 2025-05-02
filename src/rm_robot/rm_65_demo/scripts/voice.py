@@ -11,19 +11,16 @@ class Voice:
 
 
     def voice_translate(self):
-        def record_audio(duration, output_file):
-            """
-            录制音频并保存为 MP3 文件
-            :param duration: 录音时长（秒）
-            :param output_file: 保存的文件名
-            """
+        def record_audio(seconds, output_path):
             try:
-                print(f"开始录音... 持续 {duration} 秒")
+                print(f"开始录音... 持续 {seconds} 秒")
                 fs = 44100  # 采样率
-                audio_data = sd.rec(int(duration * fs), samplerate=fs, channels=2, dtype='int16')
-                sd.wait()  # 等待录音完成
-                wav.write(output_file, fs, audio_data)
-                print(f"录音完成，保存为 {output_file}")
+                audio_data = sd.rec(int(seconds * fs), samplerate=fs, channels=2, dtype='int16')
+
+                # 等待录音完成
+                sd.wait()  
+                wav.write(output_path, fs, audio_data)
+                print(f"录音完成，保存为 {output_path}")
 
             except Exception as e:
                 print(f"录音失败: {e}")
@@ -52,17 +49,17 @@ class Voice:
                 print(f"运行 whisper 时出错: {e}")
 
 
-        # 设置录音时长和文件名
-        output_file = self.config["voice_record_path"]
+        # 设置音频文件输出路径
+        output_path = self.config["voice_record_path"]
 
-        # 录音并保存为 MP3
-        if os.path.exists(output_file):
-            os.remove(output_file)
-        record_audio(self.config["voice_record_seconds"], output_file)
+        # 录音
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        record_audio(self.config["voice_record_seconds"], output_path)
 
-        # 执行 whisper 命令
+        # 执行whisper命令
         run_whisper(
-            input_file=output_file,
+            input_file=output_path,
             language="zh",
             output_dir=r".",
             output_format="txt",
